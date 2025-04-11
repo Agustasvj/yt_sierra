@@ -4,6 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes
 import httpx
 import json
+from telegram.error import Conflict
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -66,7 +67,7 @@ async def download_and_send(query: Update, context: ContextTypes.DEFAULT_TYPE, u
         try:
             response = await client.post(API_URL, json=payload)
             logger.debug(f"API response status: {response.status_code}, headers: {response.headers}")
-            response.raise_for_status()  # Raise on 4xx/5xx
+            response.raise_for_status()
         except httpx.RequestError as e:
             logger.error(f"API request fucked up: {str(e)}")
             await query.edit_message_text(f"API call fucked up: {str(e)}")
@@ -104,7 +105,13 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_format, pattern="^(mp4|mp3|mp4_audio)_"))
     application.add_handler(CallbackQueryHandler(download_and_send, pattern="^(mp4_360|mp4_720|mp4_1080|mp3_64|mp3_128|mp3_192|mp3_256|mp3_320)_"))
     logger.info("Bot polling started")
-    application.run_polling()
+    try:
+        application.run_polling(timeout=10)
+    except Conflict as e:
+        logger.error(f"Polling conflict: {str(e)}. Restarting in 5s...")
+        import asyncio
+        asyncio.sleep(5)
+        application.run_polling(timeout=10)
 
 if __name__ == "__main__":
     main()
