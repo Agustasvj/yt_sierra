@@ -1,10 +1,10 @@
 import os
 import logging
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes
 import httpx
 import json
-from telegram.error import Conflict
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -94,14 +94,14 @@ async def download_and_send(query: Update, context: ContextTypes.DEFAULT_TYPE, u
         await query.edit_message_text(f"Send fucked up: {str(e)}")
     await query.delete_message()
 
-def main():
+async def run_bot():
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not set. Get your shit together.")
         raise ValueError("BOT_TOKEN not set")
     logger.info("Starting Telegram bot")
-    # Clear webhook first
-    import httpx
-    httpx.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url=")
+    # Clear webhook
+    async with httpx.AsyncClient() as client:
+        await client.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url=")
     logger.info("Webhook cleared")
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
@@ -109,7 +109,13 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_format, pattern="^(mp4|mp3|mp4_audio)_"))
     application.add_handler(CallbackQueryHandler(download_and_send, pattern="^(mp4_360|mp4_720|mp4_1080|mp3_64|mp3_128|mp3_192|mp3_256|mp3_320)_"))
     logger.info("Bot polling started")
-    application.run_polling(timeout=10, drop_pending_updates=True)
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(timeout=10, drop_pending_updates=True)
+    logger.info("Bot is running")
+    # Keep alive
+    while True:
+        await asyncio.sleep(3600)  # Sleep 1hr, Render kills idle after 15min
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(run_bot())
