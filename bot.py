@@ -99,14 +99,17 @@ def main():
         logger.error("BOT_TOKEN not set. Get your shit together.")
         raise ValueError("BOT_TOKEN not set")
     logger.info("Starting Telegram bot")
+    # Clear webhook first
+    import httpx
+    httpx.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url=")
+    logger.info("Webhook cleared")
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(None, handle_url))
     application.add_handler(CallbackQueryHandler(handle_format, pattern="^(mp4|mp3|mp4_audio)_"))
     application.add_handler(CallbackQueryHandler(download_and_send, pattern="^(mp4_360|mp4_720|mp4_1080|mp3_64|mp3_128|mp3_192|mp3_256|mp3_320)_"))
     logger.info("Bot polling started")
-    # No retry loop, let Render kill duplicates
-    application.run_polling(timeout=10, drop_pending_updates=True)  # Clear old updates
+    application.run_polling(timeout=10, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
