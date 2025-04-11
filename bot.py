@@ -105,13 +105,8 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_format, pattern="^(mp4|mp3|mp4_audio)_"))
     application.add_handler(CallbackQueryHandler(download_and_send, pattern="^(mp4_360|mp4_720|mp4_1080|mp3_64|mp3_128|mp3_192|mp3_256|mp3_320)_"))
     logger.info("Bot polling started")
-    try:
-        application.run_polling(timeout=10)
-    except Conflict as e:
-        logger.error(f"Polling conflict: {str(e)}. Restarting in 5s...")
-        import asyncio
-        asyncio.sleep(5)
-        application.run_polling(timeout=10)
+    # No retry loop, let Render kill duplicates
+    application.run_polling(timeout=10, drop_pending_updates=True)  # Clear old updates
 
 if __name__ == "__main__":
     main()
