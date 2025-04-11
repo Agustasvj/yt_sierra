@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, Filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes
 import httpx
 import json
 
@@ -19,6 +19,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
+    if url.startswith("/"):  # Skip commands
+        return
     logger.debug(f"Got URL from user {update.effective_user.id}: {url}")
     keyboard = [
         [InlineKeyboardButton("MP4", callback_data=f"mp4_{url}"),
@@ -58,7 +60,7 @@ async def handle_format(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def download_and_send(query: Update, context: ContextTypes.DEFAULT_TYPE, url: str, format: str):
     logger.debug(f"Downloading for user {query.from_user.id}: URL={url}, Format={format}")
     await query.edit_message_text(f"Ripping {format}... Hold tight, fucker.")
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         payload = {"url": url, "format": format}
         response = await client.post(API_URL, json=payload)
         logger.debug(f"API response status: {response.status_code}")
@@ -85,7 +87,7 @@ def main():
     logger.info("Starting Telegram bot")
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_url))
+    application.add_handler(MessageHandler(None, handle_url))  # No filters, handle all text
     application.add_handler(CallbackQueryHandler(handle_format, pattern="^(mp4|mp3|mp4_audio)_"))
     application.add_handler(CallbackQueryHandler(download_and_send, pattern="^(mp4_360|mp4_720|mp4_1080|mp3_64|mp3_128|mp3_192|mp3_256|mp3_320)_"))
     logger.info("Bot polling started")
