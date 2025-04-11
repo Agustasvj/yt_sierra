@@ -20,8 +20,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import os
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-API_URL = "http://127.0.0.1:8000/download"
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000/download")  # Fallback for local
 
 def sanitize_filename(filename):
     return re.sub(r'[<>:"/\\|?*]', '', filename).strip()
