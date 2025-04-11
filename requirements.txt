@@ -4,3 +4,4 @@ yt-dlp
 pydantic
 httpx
 python-telegram-bot
+ffmpeg-python

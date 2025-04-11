@@ -6,11 +6,11 @@ import uvicorn
 import logging
 import os
 import shutil
-import subprocess
 import uuid
 from starlette.background import BackgroundTask
 import re
 from time import time
+import ffmpeg  # Python bindings for FFmpeg
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -96,18 +96,20 @@ async def download_video(request: VideoRequest):
         if request.format.startswith("mp4_"):
             if downloaded_file.endswith(".mp4"):
                 shutil.move(downloaded_file, output_file)
-            else:  # Fallback merge
+            else:  # Fallback merge with ffmpeg-python
                 audio_file = f"{temp_file}_audio.m4a"
                 ydl_opts["format"] = "bestaudio"
                 ydl_opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}]
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.extract_info(request.url, download=True)
                 logger.debug(f"Separate audio downloaded: {audio_file}")
-                result = subprocess.run(
-                    ["ffmpeg", "-i", downloaded_file, "-i", audio_file, "-c:v", "copy", "-c:a", "aac", "-y", output_file],
-                    check=True, capture_output=True, text=True
-                )
-                logger.debug(f"ffmpeg stdout: {result.stdout}, stderr: {result.stderr}")
+                try:
+                    stream = ffmpeg.input(downloaded_file)
+                    audio = ffmpeg.input(audio_file)
+                    ffmpeg.output(stream, audio, output_file, vcodec="copy", acodec="aac").run(overwrite_output=True)
+                except ffmpeg.Error as e:
+                    logger.error(f"ffmpeg-python failed: {e.stderr.decode()}")
+                    raise ValueError("FFmpeg merge fucked up")
                 cleanup_list.append(audio_file)
             logger.debug(f"MP4 processing took: {time() - start_time:.2f}s")
         elif request.format == "mp4_audio":
@@ -115,11 +117,12 @@ async def download_video(request: VideoRequest):
         else:  # mp3
             bitrate = request.format.split("_")[1] + "k"
             logger.debug(f"Converting to MP3 at {bitrate}")
-            result = subprocess.run(
-                ["ffmpeg", "-i", downloaded_file, "-c:a", "mp3", "-b:a", bitrate, "-y", output_file],
-                check=True, capture_output=True, text=True
-            )
-            logger.debug(f"ffmpeg took: {time() - start_time:.2f}s")
+            try:
+                stream = ffmpeg.input(downloaded_file)
+                ffmpeg.output(stream, output_file, acodec="mp3", ab=bitrate).run(overwrite_output=True)
+            except ffmpeg.Error as e:
+                logger.error(f"ffmpeg-python failed: {e.stderr.decode()}")
+                raise ValueError("FFmpeg conversion fucked up")
 
         if not os.path.exists(output_file):
             logger.error(f"Output file missing: {output_file}")
@@ -147,6 +150,6 @@ async def download_video(request: VideoRequest):
         raise HTTPException(status_code=400, detail=f"Fucked up somewhere: {str(e)}")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))  # Default to 8000 locally
+    port = int(os.environ.get("PORT", 8000))  # Render sets PORT
     logger.info(f"Starting API server on port {port}")
     uvicorn.run("api:app", host="0.0.0.0", port=port, reload=True, log_level="debug")
