@@ -62,22 +62,35 @@ async def download_and_send(query: Update, context: ContextTypes.DEFAULT_TYPE, u
     await query.edit_message_text(f"Ripping {format}... Hold tight, fucker.")
     async with httpx.AsyncClient(timeout=120.0) as client:
         payload = {"url": url, "format": format}
-        response = await client.post(API_URL, json=payload)
-        logger.debug(f"API response status: {response.status_code}")
+        logger.debug(f"Sending request to {API_URL} with payload: {payload}")
+        try:
+            response = await client.post(API_URL, json=payload)
+            logger.debug(f"API response status: {response.status_code}, headers: {response.headers}")
+            response.raise_for_status()  # Raise on 4xx/5xx
+        except httpx.RequestError as e:
+            logger.error(f"API request fucked up: {str(e)}")
+            await query.edit_message_text(f"API call fucked up: {str(e)}")
+            return
         if response.status_code != 200:
-            logger.error(f"API fucked up: {response.text}")
+            logger.error(f"API returned shit: {response.status_code} - {response.text}")
             await query.edit_message_text(f"API fucked up: {response.text}")
             return
         file_data = response.content
         filename = response.headers.get("Content-Disposition", "attachment; filename=download").split("filename=")[1].strip('"')
         metadata = json.loads(response.headers.get("X-Metadata", "{}"))
         caption = f"{metadata.get('title', 'Unknown')}\nBy: {metadata.get('uploader', 'Unknown')}"
-    await context.bot.send_document(
-        chat_id=query.message.chat_id,
-        document=file_data,
-        filename=filename,
-        caption=caption
-    )
+        logger.debug(f"Sending file: {filename}, size: {len(file_data)} bytes")
+    try:
+        await context.bot.send_document(
+            chat_id=query.message.chat_id,
+            document=file_data,
+            filename=filename,
+            caption=caption
+        )
+        logger.debug("File sent to Telegram")
+    except Exception as e:
+        logger.error(f"Telegram send fucked up: {str(e)}")
+        await query.edit_message_text(f"Send fucked up: {str(e)}")
     await query.delete_message()
 
 def main():
@@ -87,7 +100,7 @@ def main():
     logger.info("Starting Telegram bot")
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(None, handle_url))  # No filters, handle all text
+    application.add_handler(MessageHandler(None, handle_url))
     application.add_handler(CallbackQueryHandler(handle_format, pattern="^(mp4|mp3|mp4_audio)_"))
     application.add_handler(CallbackQueryHandler(download_and_send, pattern="^(mp4_360|mp4_720|mp4_1080|mp3_64|mp3_128|mp3_192|mp3_256|mp3_320)_"))
     logger.info("Bot polling started")
