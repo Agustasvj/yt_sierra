@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = "7643200755:AAEnY79hQQ98ovHCmOp-IOcscwvDGqUbEMM"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 API_URL = "http://127.0.0.1:8000/download"
 
 def sanitize_filename(filename):

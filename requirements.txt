@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+yt-dlp
+pydantic
+httpx
+python-telegram-bot

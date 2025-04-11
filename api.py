@@ -147,5 +147,6 @@ async def download_video(request: VideoRequest):
         raise HTTPException(status_code=400, detail=f"Fucked up somewhere: {str(e)}")
 
 if __name__ == "__main__":
-    logger.info("Starting API server on port 8000")
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True, log_level="debug")
+    port = int(os.environ.get("PORT", 8000))  # Default to 8000 locally
+    logger.info(f"Starting API server on port {port}")
+    uvicorn.run("api:app", host="0.0.0.0", port=port, reload=True, log_level="debug")
